@@ -6,7 +6,11 @@ const mongoose = require('mongoose');
 const Product = require('./models/Product');
 
 const app = express();
-
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok'
+    });
+});
 // Cho phép API đọc dữ liệu JSON từ request body
 app.use(express.json());
 
