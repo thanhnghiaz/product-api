@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   test:
@@ -17,20 +18,17 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Test runner
+        run: echo "GitHub Actions runner is working!"
 
-      - name: Install dependencies
-        run: npm install
+      - name: Check repository
+        run: |
+          pwd
+          ls -la
 
-      - name: Check Node.js version
-        run: node --version
+      - name: Check Docker
+        run: docker --version
 
-      - name: Check npm version
-        run: npm --version
-
-      - name: Test CI pipeline
-        run: echo "Product API CI pipeline is working!"
+      - name: CI test passed
+        run: echo "Product CI pipeline completed successfully!"
 ```
