@@ -1,0 +1,145 @@
+```yaml
+name: Product API CRUD CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval
+          'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PORT: 3000
+      MONGODB_URI: mongodb://127.0.0.1:27017/productdb
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax
+        run: node --check server.js
+
+      - name: Start API
+        run: |
+          node server.js > app.log 2>&1 &
+          echo $! > app.pid
+
+      - name: Wait for API healthcheck
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent \
+              http://127.0.0.1:3000/health; then
+              echo "API is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          cat app.log
+          exit 1
+
+      - name: Test CRUD
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+
+          const base = 'http://127.0.0.1:3000/api/products';
+
+          async function request(path, method, body) {
+            const response = await fetch(base + path, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              ...(body ? { body: JSON.stringify(body) } : {})
+            });
+
+            const text = await response.text();
+            let data;
+
+            try {
+              data = text ? JSON.parse(text) : null;
+            } catch {
+              data = text;
+            }
+
+            console.log(`${method} ${path}: ${response.status}`);
+
+            assert.ok(
+              response.ok,
+              `Request failed: ${method} ${path}: ${text}`
+            );
+
+            return data;
+          }
+
+          function getId(data) {
+            const item =
+              data?.product ??
+              data?.data?.product ??
+              data?.data ??
+              data;
+
+            const id = item?._id ?? item?.id;
+
+            assert.ok(id, 'Response does not contain product ID');
+            return id;
+          }
+
+          async function main() {
+            const created = await request('', 'POST', {
+              name: 'CI Test Product',
+              price: 100
+            });
+
+            const id = getId(created);
+
+            await request(`/${id}`, 'GET');
+
+            await request(`/${id}`, 'PUT', {
+              name: 'CI Updated Product',
+              price: 150
+            });
+
+            await request('', 'GET');
+
+            await request(`/${id}`, 'DELETE');
+
+            console.log('CRUD tests passed');
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Show logs on failure
+        if: failure()
+        run: cat app.log || true
+```
