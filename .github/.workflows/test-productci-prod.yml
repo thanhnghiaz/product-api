@@ -1,4 +1,4 @@
-```yaml
+
 name: Product API CRUD CI
 
 on:
@@ -142,4 +142,4 @@ jobs:
       - name: Show logs on failure
         if: failure()
         run: cat app.log || true
-```
+
