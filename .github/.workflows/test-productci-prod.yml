@@ -1,21 +1,11 @@
 
-      name: Test Product CI
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
       - name: Test CRUD
         run: |
           node <<'NODE'
           const assert = require('node:assert/strict');
 
           const base = 'http://127.0.0.1:3000/api/products';
-          const pid = 999001;
+          const pid = Number(process.env.GITHUB_RUN_ID.slice(-8));
 
           async function request(path, method, body, expectedStatus) {
             const response = await fetch(base + path, {
