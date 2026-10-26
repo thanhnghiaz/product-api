@@ -1,4 +1,4 @@
-```yaml
+
 name: Product API CI CD Docker Hub
 
 on:
@@ -17,8 +17,7 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --quiet --eval
-          'db.adminCommand(\"ping\").ok'"
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -81,8 +80,81 @@ jobs:
         run: |
           curl --fail http://127.0.0.1:3000/health
 
+      - name: Test CRUD
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+
+          const base = 'http://127.0.0.1:3000/api/products';
+          const pid = Number(process.env.GITHUB_RUN_ID.slice(-8));
+
+          async function request(path, method, body, expectedStatus) {
+            const response = await fetch(base + path, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              ...(body ? { body: JSON.stringify(body) } : {})
+            });
+
+            const text = await response.text();
+            let data;
+
+            try {
+              data = text ? JSON.parse(text) : null;
+            } catch {
+              data = text;
+            }
+
+            console.log(`${method} ${path}: ${response.status}`);
+
+            assert.equal(
+              response.status,
+              expectedStatus,
+              `Expected ${expectedStatus}, got ${response.status}: ${text}`
+            );
+
+            return data;
+          }
+
+          async function main() {
+            const created = await request('', 'POST', {
+              pid,
+              pname: 'CI Test Product',
+              price: 100,
+              quantity: 10
+            }, 201);
+
+            assert.equal(created.data.pid, pid);
+
+            const found = await request(`/${pid}`, 'GET', null, 200);
+            assert.equal(found.data.pname, 'CI Test Product');
+
+            const updated = await request(`/${pid}`, 'PUT', {
+              pname: 'CI Updated Product',
+              price: 150,
+              quantity: 20
+            }, 200);
+
+            assert.equal(updated.data.pname, 'CI Updated Product');
+            assert.equal(updated.data.price, 150);
+
+            const list = await request('', 'GET', null, 200);
+            assert.ok(Array.isArray(list.data));
+            assert.ok(list.data.some(p => p.pid === pid));
+
+            await request(`/${pid}`, 'DELETE', null, 200);
+            await request(`/${pid}`, 'GET', null, 404);
+
+            console.log('All CRUD tests passed');
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
       - name: Login to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -104,4 +176,3 @@ jobs:
       - name: Cleanup test container
         if: always()
         run: docker rm -f product-api-test || true
-```
