@@ -8,7 +8,7 @@ const Product = require('./models/Product');
 const app = express();
 app.get('/health', (req, res) => {
     res.status(200).json({
-        status: 'ok'
+        status: 'ok '
     });
 });
 // Cho phép API đọc dữ liệu JSON từ request body
@@ -107,6 +107,18 @@ app.get('/api/products/:pid', async (req, res) => {
     }
 });
 
+// Xóa toàn bộ sản phẩm
+app.delete('/api/products', async (req, res) => {
+    try {
+        const result = await prisma.product.deleteMany({});
+        res.status(200).json({
+            success: true,
+            message: `Đã xóa thành công ${result.count} sản phẩm!`
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 // UPDATE: Cập nhật sản phẩm theo pid
 app.put('/api/products/:pid', async (req, res) => {
     try {
